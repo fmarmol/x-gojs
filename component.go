@@ -42,7 +42,7 @@ type Val struct {
 	id              string
 	children        []*Val
 	textfn          func() string
-	parent          *Val
+	Parent          *Val
 	eventListeners  map[string]struct{}
 }
 
@@ -94,7 +94,7 @@ func (v *Val) OnClick(f GoFunc) *Val {
 func (v *Val) C(others ...*Val) *Val {
 	for _, other := range others {
 		v.children = append(v.children, other)
-		other.parent = v
+		other.Parent = v
 		v.c(other)
 	}
 	return v
@@ -248,6 +248,14 @@ func n(kind string) *Val {
 	return v
 }
 
+func Input() *Val {
+	input := n("INPUT")
+	if !input.Value.Truthy() {
+		panic("input not valid")
+	}
+	return input
+}
+
 func Text(t func() string) *Val {
 	text := n("TEXT")
 	if !text.Value.Truthy() {
@@ -272,13 +280,13 @@ func Div() *Val {
 
 func Delete(v *Val) {
 	child := doc.Val.Value.Call("getElementById", v.id)
-	parent := v.parent
+	parent := v.Parent
 	parent.Value.Call("removeChild", child)
 }
 
 func Init(v *Val) {
 	body := doc.Body()
-	v.parent = body
+	v.Parent = body
 	body.
 		C(v)
 	body.Render()
