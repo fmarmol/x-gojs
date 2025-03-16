@@ -23,10 +23,10 @@ func (t *Task) View() *Val {
 		C(
 			Text(String(t.Title)),
 			input.
-				OnClick(GoFunc0(func() {
+				OnClick(func() {
 					t.Done = !t.Done
 					input.Parent.Render()
-				}).GoFunc()),
+				}),
 		)
 }
 
@@ -49,9 +49,9 @@ func (c *TodoList) View() *Val {
 	div.C(
 		Div().Class("flex flex-row items-center border border-black p-1 gap-2").C(
 			input,
-			Button().Class("bg-blue-300 p-1 border border-black rounded h-[41px]").
+			Button().Class("bg-blue-300 p-1 border border-black rounded h-[41px] hover:cursor-pointer hover:bg-blue-400").
 				C(Text(String("new task"))).
-				OnClick(GoFunc0(func() {
+				OnClick(func() {
 					text := input.Value.Get("value").String()
 					if strings.TrimSpace(text) == "" {
 						return
@@ -61,9 +61,10 @@ func (c *TodoList) View() *Val {
 						c.Tasks = append(c.Tasks, *newTask)
 						div.C(newTask.View())
 						div.Render()
+						input.Value.Set("value", "")
 					}
 
-				}).GoFunc()),
+				}),
 		),
 	)
 	for _, t := range c.Tasks {

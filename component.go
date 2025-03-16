@@ -4,11 +4,24 @@ package gojs
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"syscall/js"
 
 	"github.com/google/uuid"
 )
+
+type Component[T any] struct {
+	*Val
+	S T
+}
+
+func NewComponent[T any](s T) *Component[T] {
+	return &Component[T]{
+		Val: new(Val),
+		S:   s,
+	}
+}
 
 type Attr struct {
 	Key   string
@@ -38,7 +51,7 @@ type Val struct {
 	classes         []string
 	classesOnCond   []ClassCond
 	classesOnRevCon []ClassRevCond
-	onclick         GoFunc
+	onclick         any
 	id              string
 	children        []*Val
 	textfn          func() string
@@ -86,7 +99,12 @@ func (v *Val) Text(f func() string) *Val {
 	return v
 }
 
-func (v *Val) OnClick(f GoFunc) *Val {
+// func (v *Val) OnClick2(f any) *Val {
+// 	v.onclick2 = f
+// 	return v
+// }
+
+func (v *Val) OnClick(f any) *Val {
 	v.onclick = f
 	return v
 }
@@ -194,22 +212,28 @@ func (v *Val) a(attrName string, value func() string) *Val {
 
 type GoFunc func(this js.Value, args []js.Value) any
 
-type GoFunc0 func()
-type GoFunc0Err func() any
+// type GoFunc0 func()
+// type GoFunc0Err func() any
 
-func (g0 GoFunc0) GoFunc() GoFunc {
-	return func(this js.Value, args []js.Value) any {
-		g0()
-		return nil
-	}
-}
-func (g0 GoFunc0Err) GoFunc() GoFunc {
-	return func(this js.Value, args []js.Value) any {
-		return g0()
-	}
-}
+// func (g0 GoFunc0) GoFunc() GoFunc {
+// 	return func(this js.Value, args []js.Value) any {
+// 		g0()
+// 		return nil
+// 	}
+// }
 
-func (v *Val) f(attrName string, value GoFunc) *Val {
+// func (g0 GoFunc0Err) GoFunc() GoFunc {
+// 	return func(this js.Value, args []js.Value) any {
+// 		return g0()
+// 	}
+// }
+
+func (v *Val) f(attrName string, value any) *Val {
+	_value := reflect.TypeOf(value)
+	if _value.Kind() != reflect.Func {
+		panic(fmt.Errorf("cannot only use function, but received a %v", _value.Kind()))
+
+	}
 	if v.eventListeners == nil {
 		v.eventListeners = map[string]struct{}{}
 	}
@@ -217,11 +241,39 @@ func (v *Val) f(attrName string, value GoFunc) *Val {
 	if ok {
 		return v
 	}
+
 	v.eventListeners[attrName] = struct{}{}
-	fn := js.FuncOf(value)
-	v.Value.Call("addEventListener", attrName, fn)
+	fnType := reflect.TypeOf(func(js.Value, []js.Value) any { return nil })
+
+	switch _value.NumIn() {
+	case 0:
+		fn := value.(func())
+		resFn := reflect.MakeFunc(fnType, func(args []reflect.Value) (results []reflect.Value) {
+			fn()
+			return []reflect.Value{reflect.ValueOf(1)}
+		})
+		goF := resFn.Convert(fnType).Interface().(func(js.Value, []js.Value) any)
+		jsF := js.FuncOf(goF)
+		v.Value.Call("addEventListener", attrName, jsF)
+		return v
+	}
 	return v
+
 }
+
+// func (v *Val) f(attrName string, value GoFunc) *Val {
+// 	if v.eventListeners == nil {
+// 		v.eventListeners = map[string]struct{}{}
+// 	}
+// 	_, ok := v.eventListeners[attrName]
+// 	if ok {
+// 		return v
+// 	}
+// 	v.eventListeners[attrName] = struct{}{}
+// 	fn := js.FuncOf(value)
+// 	v.Value.Call("addEventListener", attrName, fn)
+// 	return v
+// }
 
 type Doc struct{ Val }
 
