@@ -210,25 +210,7 @@ func (v *Val) a(attrName string, value func() string) *Val {
 	return v
 }
 
-type GoFunc func(this js.Value, args []js.Value) any
-
-// type GoFunc0 func()
-// type GoFunc0Err func() any
-
-// func (g0 GoFunc0) GoFunc() GoFunc {
-// 	return func(this js.Value, args []js.Value) any {
-// 		g0()
-// 		return nil
-// 	}
-// }
-
-// func (g0 GoFunc0Err) GoFunc() GoFunc {
-// 	return func(this js.Value, args []js.Value) any {
-// 		return g0()
-// 	}
-// }
-
-func (v *Val) f(attrName string, value any) *Val {
+func (v *Val) f(event string, value any) *Val {
 	_value := reflect.TypeOf(value)
 	if _value.Kind() != reflect.Func {
 		panic(fmt.Errorf("cannot only use function, but received a %v", _value.Kind()))
@@ -237,12 +219,12 @@ func (v *Val) f(attrName string, value any) *Val {
 	if v.eventListeners == nil {
 		v.eventListeners = map[string]struct{}{}
 	}
-	_, ok := v.eventListeners[attrName]
+	_, ok := v.eventListeners[event]
 	if ok {
 		return v
 	}
 
-	v.eventListeners[attrName] = struct{}{}
+	v.eventListeners[event] = struct{}{}
 	fnType := reflect.TypeOf(func(js.Value, []js.Value) any { return nil })
 
 	switch _value.NumIn() {
@@ -254,26 +236,12 @@ func (v *Val) f(attrName string, value any) *Val {
 		})
 		goF := resFn.Convert(fnType).Interface().(func(js.Value, []js.Value) any)
 		jsF := js.FuncOf(goF)
-		v.Value.Call("addEventListener", attrName, jsF)
+		v.Value.Call("addEventListener", event, jsF)
 		return v
 	}
 	return v
 
 }
-
-// func (v *Val) f(attrName string, value GoFunc) *Val {
-// 	if v.eventListeners == nil {
-// 		v.eventListeners = map[string]struct{}{}
-// 	}
-// 	_, ok := v.eventListeners[attrName]
-// 	if ok {
-// 		return v
-// 	}
-// 	v.eventListeners[attrName] = struct{}{}
-// 	fn := js.FuncOf(value)
-// 	v.Value.Call("addEventListener", attrName, fn)
-// 	return v
-// }
 
 type Doc struct{ Val }
 
