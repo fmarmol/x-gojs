@@ -210,10 +210,14 @@ func (v *Val) a(attrName string, value func() string) *Val {
 	return v
 }
 
+func (v *Val) AddEventListener(event string, fn any) {
+	v.f(event, fn)
+}
+
 func (v *Val) f(event string, value any) *Val {
-	_value := reflect.TypeOf(value)
-	if _value.Kind() != reflect.Func {
-		panic(fmt.Errorf("cannot only use function, but received a %v", _value.Kind()))
+	_type := reflect.TypeOf(value)
+	if _type.Kind() != reflect.Func {
+		panic(fmt.Errorf("cannot only use function, but received a %v", _type.Kind()))
 
 	}
 	if v.eventListeners == nil {
@@ -227,7 +231,7 @@ func (v *Val) f(event string, value any) *Val {
 	v.eventListeners[event] = struct{}{}
 	fnType := reflect.TypeOf(func(js.Value, []js.Value) any { return nil })
 
-	switch _value.NumIn() {
+	switch _type.NumIn() {
 	case 0:
 		fn := value.(func())
 		resFn := reflect.MakeFunc(fnType, func(args []reflect.Value) (results []reflect.Value) {
@@ -238,9 +242,21 @@ func (v *Val) f(event string, value any) *Val {
 		jsF := js.FuncOf(goF)
 		v.Value.Call("addEventListener", event, jsF)
 		return v
+	case 2:
+		fn := value.(func(this js.Value, args []js.Value) any)
+		resFn := reflect.MakeFunc(fnType, func(args []reflect.Value) (results []reflect.Value) {
+			arg0 := args[0]
+			arg1 := args[1]
+			fn(arg0.Interface().(js.Value), arg1.Interface().([]js.Value))
+			return []reflect.Value{reflect.ValueOf(1)}
+		})
+		goF := resFn.Convert(fnType).Interface().(func(js.Value, []js.Value) any)
+		jsF := js.FuncOf(goF)
+		v.Value.Call("addEventListener", event, jsF)
+		return v
+	default:
+		panic(fmt.Errorf("func with %d args not supported", _type.NumIn()))
 	}
-	return v
-
 }
 
 type Doc struct{ Val }
