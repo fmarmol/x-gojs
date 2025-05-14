@@ -42,6 +42,7 @@ type ClassRevCond struct {
 	class1 string
 	class2 string
 	cond   func() bool
+	ptr    *bool
 }
 
 type Val struct {
@@ -86,6 +87,11 @@ func (v *Val) ClassOnRevCond(f func() bool, c1, c2 string) *Val {
 	return v
 }
 
+func (v *Val) ClassOnRevCond2(b *bool, c1, c2 string) *Val {
+	v.classesOnRevCon = append(v.classesOnRevCon, ClassRevCond{ptr: b, class1: c1, class2: c2})
+	return v
+}
+
 func (v *Val) Class(values ...string) *Val {
 	for _, va := range values {
 		subv := strings.Fields(va)
@@ -116,6 +122,19 @@ func (v *Val) C(others ...*Val) *Val {
 		v.c(other)
 	}
 	return v
+}
+
+func (v *Val) Draggable(f JsFunc) *Val {
+	v.Attr("draggable", String("true"))
+	return v.f("dragstart", f)
+}
+
+func (v *Val) OnDrop(f JsFunc) *Val {
+	return v.f("drop", f)
+}
+
+func (v *Val) OnDragOver(f JsFunc) *Val {
+	return v.f("dragover", f)
 }
 
 func (v *Val) Attr(key string, value func() string) *Val {
@@ -166,6 +185,25 @@ func (v *Val) Render() *Val {
 	for _, class := range v.classesOnRevCon {
 		classesOk := strings.Fields(class.class1)
 		classesKO := strings.Fields(class.class2)
+		if class.ptr != nil {
+			if *class.ptr {
+				for _, c := range classesOk {
+					v.Value.Get("classList").Call("add", c)
+				}
+				for _, c := range classesKO {
+					v.Value.Get("classList").Call("remove", c)
+				}
+			} else {
+				for _, c := range classesKO {
+					v.Value.Get("classList").Call("add", c)
+				}
+				for _, c := range classesOk {
+					v.Value.Get("classList").Call("remove", c)
+				}
+
+			}
+			continue
+		}
 		if class.cond() {
 			for _, c := range classesOk {
 				v.Value.Get("classList").Call("add", c)
@@ -284,6 +322,24 @@ func n(kind string) *Val {
 	return v
 }
 
+type Func struct {
+	js.Func
+	Name string
+}
+
+func GetElementById(id string) *Val {
+	child := doc.Val.Value.Call("getElementById", id)
+	return &Val{Value: child}
+}
+
+func RegisterFunc(name string, f js.Func) *Func {
+	js.Global().Set(name, f)
+	return &Func{
+		Name: name,
+		Func: f,
+	}
+}
+
 func Input() *Val {
 	input := n("INPUT")
 	if !input.Value.Truthy() {
@@ -327,3 +383,5 @@ func Init(v *Val) {
 		C(v)
 	body.Render()
 }
+
+type JsFunc = func(js.Value, []js.Value) any
