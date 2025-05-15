@@ -384,4 +384,4 @@ func Init(v *Val) {
 	body.Render()
 }
 
-type JsFunc = func(js.Value, []js.Value) any
+ ype JsFunc = func(js.Value, []js.Value) any

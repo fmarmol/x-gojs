@@ -11,26 +11,25 @@ import (
 func main() {
 	stop := make(chan struct{})
 	allowDrop := func(this js.Value, args []js.Value) any {
-		event := args[0]
-		event.Call("preventDefault")
+		event := NewDragEvent(args[0])
+		event.PreventDefault()
 		return nil
 
 	}
 
 	dragStart := func(this js.Value, args []js.Value) any {
-		event := args[0]
-		event.Get("dataTransfer").Call("setData", "text", event.Get("target").Get("id").String())
+		event := NewDragEvent(args[0])
+		event.DataTransfert().SetData("text", event.Target().Value.Get("id").String())
 		return nil
 
 	}
 
 	drop := func(this js.Value, args []js.Value) any {
-		event := args[0]
-		event.Call("preventDefault")
-		data := event.Get("dataTransfer").Call("getData", "text").String()
-
+		event := NewDragEvent(args[0])
+		event.PreventDefault()
+		data := event.DataTransfert().GetData("text")
 		child := GetElementById(data)
-		event.Get("target").Call("appendChild", child.Value)
+		event.Target().C(child)
 		return nil
 	}
 
