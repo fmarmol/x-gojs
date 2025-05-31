@@ -4,11 +4,10 @@ package gojs
 
 import (
 	"fmt"
+	"math/rand/v2"
 	"reflect"
 	"strings"
 	"syscall/js"
-
-	"github.com/google/uuid"
 )
 
 type Component[T any] struct {
@@ -58,6 +57,22 @@ type Val struct {
 	textfn          func() string
 	Parent          *Val
 	eventListeners  map[string]struct{}
+}
+
+func (v *Val) Children() []*Val {
+	return v.children
+}
+
+func (v *Val) SwapChildren(i, j int) *Val {
+	children := v.children
+	for _, child := range children {
+		v.RemoveChild(child)
+	}
+	children[i], children[j] = children[j], children[i]
+	for _, child := range children {
+		v.C(child)
+	}
+	return v
 }
 
 func (v *Val) RemoveChild(child *Val) *Val {
@@ -232,14 +247,20 @@ func (v *Val) Render() *Val {
 }
 
 func (v *Val) CreateElement(elem string) *Val {
-	id := uuid.NewString()
+	id := "id_" + fmt.Sprint(rand.Int32())
+	// id := uuid.NewString()
 
 	n := &Val{Value: v.Value.Call("createElement", elem), id: id}
 	return n
 }
 
+func (v *Val) Call(funcname string, args ...any) js.Value {
+	fmt.Println("DEBUG:", funcname, args)
+	return v.Value.Call(funcname, args...)
+}
+
 func (v *Val) c(child *Val) *Val {
-	v.Value.Call("appendChild", child.Value)
+	v.Call("appendChild", child.Value)
 	return v
 }
 
@@ -384,4 +405,4 @@ func Init(v *Val) {
 	body.Render()
 }
 
- ype JsFunc = func(js.Value, []js.Value) any
+type JsFunc = func(js.Value, []js.Value) any
