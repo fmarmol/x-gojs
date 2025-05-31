@@ -255,7 +255,6 @@ func (v *Val) CreateElement(elem string) *Val {
 }
 
 func (v *Val) Call(funcname string, args ...any) js.Value {
-	fmt.Println("DEBUG:", funcname, args)
 	return v.Value.Call(funcname, args...)
 }
 
