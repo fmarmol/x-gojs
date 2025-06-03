@@ -7,8 +7,39 @@ import (
 	"math/rand/v2"
 	"reflect"
 	"strings"
+	"sync"
 	"syscall/js"
 )
+
+type EventKind int
+
+type Event2 struct {
+	Val       *Val
+	EventArgs any
+	EventKind int
+}
+
+var eventChan = make(chan Event2)
+
+func (v *Val) Send(event Event2) {
+	eventChan <- event
+}
+
+func (v *Val) SubScribe(eventKind int, f func(e Event2)) (cancel func()) {
+	// if v.eventChan == nil {
+	// 	v.eventChan = make(chan Event2)
+	// }
+	newC := make(chan Event2)
+	hub.register(eventKind, newC)
+	go func() {
+		for event := range newC {
+			f(event)
+		}
+	}()
+	return func() {
+		close(newC)
+	}
+}
 
 type Component[T any] struct {
 	*Val
@@ -56,7 +87,18 @@ type Val struct {
 	children        []*Val
 	textfn          func() string
 	Parent          *Val
+	IdxInParent     int
 	eventListeners  map[string]struct{}
+	eventChan       chan Event2
+}
+
+func (v *Val) ID(id string) *Val {
+	v.id = id
+	return v
+}
+
+func (v *Val) GetID() string {
+	return v.id
 }
 
 func (v *Val) Children() []*Val {
@@ -82,6 +124,7 @@ func (v *Val) RemoveChild(child *Val) *Val {
 			continue
 		}
 		newChildren = append(newChildren, c)
+		c.IdxInParent = len(newChildren)
 	}
 	v.children = newChildren
 	v.Value.Call("removeChild", child.Value)
@@ -120,11 +163,6 @@ func (v *Val) Text(f func() string) *Val {
 	return v
 }
 
-// func (v *Val) OnClick2(f any) *Val {
-// 	v.onclick2 = f
-// 	return v
-// }
-
 func (v *Val) OnClick(f any) *Val {
 	v.onclick = f
 	return v
@@ -133,10 +171,35 @@ func (v *Val) OnClick(f any) *Val {
 func (v *Val) C(others ...*Val) *Val {
 	for _, other := range others {
 		v.children = append(v.children, other)
+		other.IdxInParent = len(v.children) - 1
 		other.Parent = v
 		v.c(other)
 	}
 	return v
+}
+
+func (v *Val) MouseEnter(f JsFunc) *Val {
+	return v.f("mouseenter", f)
+}
+
+func (v *Val) MouseLeave(f JsFunc) *Val {
+	return v.f("mouseleave", f)
+}
+
+func (v *Val) MouseRightClick(f JsFunc) *Val {
+	return v.f("contextmenu", f)
+}
+
+func (v *Val) MouseLeftClick(f JsFunc) *Val {
+	return v.f("click", f)
+}
+
+func (v *Val) MouseDblClick(f JsFunc) *Val {
+	return v.f("dblclick", f)
+}
+
+func (v *Val) DragEnd(f JsFunc) *Val {
+	return v.f("dragend", f)
 }
 
 func (v *Val) Draggable(f JsFunc) *Val {
@@ -396,12 +459,39 @@ func Delete(v *Val) {
 	parent.Value.Call("removeChild", child)
 }
 
+type Hub struct {
+	sync.Mutex
+	subscribers map[int][]chan Event2
+}
+
+var hub = Hub{
+	subscribers: make(map[int][]chan Event2),
+}
+
+func (h *Hub) register(event int, ch chan Event2) {
+	h.Lock()
+	h.subscribers[event] = append(h.subscribers[event], ch)
+	h.Unlock()
+}
+
+func (h *Hub) run() {
+	for event := range eventChan {
+		for _, ch := range h.subscribers[event.EventKind] {
+			ch <- event
+		}
+	}
+}
+
 func Init(v *Val) {
+	go func() {
+		hub.run()
+	}()
 	body := doc.Body()
 	v.Parent = body
 	body.
 		C(v)
 	body.Render()
+
 }
 
 type JsFunc = func(js.Value, []js.Value) any
