@@ -4,12 +4,26 @@ package gojs
 
 import (
 	"fmt"
+	"log"
 	"math/rand/v2"
 	"reflect"
 	"strings"
 	"sync"
 	"syscall/js"
+	"unsafe"
 )
+
+type Elem struct {
+	value any
+	val   *Val
+	kind  reflect.Kind
+}
+
+var nodes map[unsafe.Pointer][]Elem
+
+func init() {
+	nodes = make(map[unsafe.Pointer][]Elem)
+}
 
 type EventKind int
 
@@ -58,9 +72,9 @@ type Attr struct {
 	Value func() string
 }
 
-func String(s string) func() string {
+func String[T ~string | ~int | ~float32 | ~float64](s T) func() string {
 	return func() string {
-		return s
+		return fmt.Sprint(s)
 	}
 }
 
@@ -161,6 +175,67 @@ func (v *Val) Class(values ...string) *Val {
 func (v *Val) Text(f func() string) *Val {
 	v.textfn = f
 	return v
+}
+
+func (v *Val) State(_struct any, field string) *Val {
+
+	_sval := reflect.ValueOf(_struct)
+	_field := _sval.Elem().FieldByName(field)
+	_fieldKind := _field.Kind()
+	addr := _field.Addr()
+	fieldValue := _field.Interface()
+
+	var ptr unsafe.Pointer
+	switch _fieldKind {
+	case reflect.Int:
+		ptr = unsafe.Pointer(addr.Interface().(*int))
+	case reflect.Int32:
+		ptr = unsafe.Pointer(addr.Interface().(*int32))
+	case reflect.Int64:
+		ptr = unsafe.Pointer(addr.Interface().(*int64))
+	case reflect.Float32:
+		ptr = unsafe.Pointer(addr.Interface().(*float32))
+	case reflect.Float64:
+		ptr = unsafe.Pointer(addr.Interface().(*float64))
+	case reflect.String:
+		ptr = unsafe.Pointer(addr.Interface().(*string))
+	default:
+		panic("not managed")
+	}
+
+	nodes[ptr] = append(nodes[ptr], Elem{value: fieldValue, val: v, kind: _fieldKind})
+	return v
+}
+
+func Update(ptr unsafe.Pointer) {
+	nodes, ok := nodes[ptr]
+	if !ok {
+		log.Println("Warning not found")
+	}
+	for _, node := range nodes {
+
+		var new_value any
+
+		switch node.kind {
+		case reflect.Int:
+			new_value = *(*int)(ptr)
+		case reflect.Int32:
+			new_value = *(*int32)(ptr)
+		case reflect.Int64:
+			new_value = *(*int64)(ptr)
+		case reflect.Float32:
+			new_value = *(*float32)(ptr)
+		case reflect.Float64:
+			new_value = *(*float64)(ptr)
+		case reflect.String:
+			new_value = *(*string)(ptr)
+		}
+		prev_value := node.value
+
+		if prev_value != new_value {
+			node.val.Render()
+		}
+	}
 }
 
 func (v *Val) OnClick(f any) *Val {
