@@ -26,7 +26,7 @@ func (c *Counter) View() *Val {
 				Update[int](unsafe.Pointer(&c.Count))
 			}),
 	)
-	State2[int](div, c, "Count")
+	State[int](div, c, "Count")
 	return Div().C(div, button)
 }
 

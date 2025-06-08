@@ -177,7 +177,7 @@ func (v *Val) Text(f func() string) *Val {
 	return v
 }
 
-func State2[T any](v *Val, _struct any, field string) {
+func State[T any](v *Val, _struct any, field string) {
 	_sval := reflect.ValueOf(_struct)
 	_field := _sval.Elem().FieldByName(field)
 	_fieldKind := _field.Kind()
