@@ -11,24 +11,23 @@ import (
 
 type Counter struct {
 	*Val
-	Count string
+	Count int
 }
 
 func (c *Counter) View() *Val {
 
 	div := Div().C(
-		Div().State(c, "Count").Text(func() string { return fmt.Sprint(c.Count) }),
-		Button().C(
-			Text(String("inc")),
-		).OnClick(func() {
-			c.Count += "1"
-			Update(unsafe.Pointer(&c.Count))
-		}),
+		Div().Text(func() string { return fmt.Sprint(c.Count) }),
 	)
-	otherDiv := Div().C(
-		Button().C(Text(String("outside"))).OnClick(func() { c.Count += "2"; Update(unsafe.Pointer(&c.Count)) }),
+	button := Div().C(
+		Button().C(Text(String("inc"))).
+			OnClick(func() {
+				c.Count += 1
+				Update[int](unsafe.Pointer(&c.Count))
+			}),
 	)
-	return Div().C(div, otherDiv)
+	State2[int](div, c, "Count")
+	return Div().C(div, button)
 }
 
 func main() {

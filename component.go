@@ -19,10 +19,10 @@ type Elem struct {
 	kind  reflect.Kind
 }
 
-var nodes map[unsafe.Pointer][]Elem
+var nodes map[unsafe.Pointer][]*Elem
 
 func init() {
-	nodes = make(map[unsafe.Pointer][]Elem)
+	nodes = make(map[unsafe.Pointer][]*Elem)
 }
 
 type EventKind int
@@ -177,62 +177,47 @@ func (v *Val) Text(f func() string) *Val {
 	return v
 }
 
-func (v *Val) State(_struct any, field string) *Val {
-
+func State2[T any](v *Val, _struct any, field string) {
 	_sval := reflect.ValueOf(_struct)
 	_field := _sval.Elem().FieldByName(field)
 	_fieldKind := _field.Kind()
 	addr := _field.Addr()
 	fieldValue := _field.Interface()
 
-	var ptr unsafe.Pointer
-	switch _fieldKind {
-	case reflect.Int:
-		ptr = unsafe.Pointer(addr.Interface().(*int))
-	case reflect.Int32:
-		ptr = unsafe.Pointer(addr.Interface().(*int32))
-	case reflect.Int64:
-		ptr = unsafe.Pointer(addr.Interface().(*int64))
-	case reflect.Float32:
-		ptr = unsafe.Pointer(addr.Interface().(*float32))
-	case reflect.Float64:
-		ptr = unsafe.Pointer(addr.Interface().(*float64))
-	case reflect.String:
-		ptr = unsafe.Pointer(addr.Interface().(*string))
-	default:
-		panic("not managed")
-	}
-
-	nodes[ptr] = append(nodes[ptr], Elem{value: fieldValue, val: v, kind: _fieldKind})
-	return v
+	ptr := unsafe.Pointer(addr.Interface().(*T))
+	nodes[ptr] = append(nodes[ptr], &Elem{value: fieldValue, val: v, kind: _fieldKind})
 }
 
-func Update(ptr unsafe.Pointer) {
+func Update[T any](ptr unsafe.Pointer) {
 	nodes, ok := nodes[ptr]
 	if !ok {
 		log.Println("Warning not found")
 	}
 	for _, node := range nodes {
 
-		var new_value any
+		// var new_value any
+		new_value := any(*(*T)(ptr))
 
-		switch node.kind {
-		case reflect.Int:
-			new_value = *(*int)(ptr)
-		case reflect.Int32:
-			new_value = *(*int32)(ptr)
-		case reflect.Int64:
-			new_value = *(*int64)(ptr)
-		case reflect.Float32:
-			new_value = *(*float32)(ptr)
-		case reflect.Float64:
-			new_value = *(*float64)(ptr)
-		case reflect.String:
-			new_value = *(*string)(ptr)
-		}
+		// switch node.kind {
+		// case reflect.Int:
+		// case reflect.Int32:
+		// 	new_value = *(*int32)(ptr)
+		// case reflect.Int64:
+		// 	new_value = *(*int64)(ptr)
+		// case reflect.Float32:
+		// 	new_value = *(*float32)(ptr)
+		// case reflect.Float64:
+		// 	new_value = *(*float64)(ptr)
+		// case reflect.String:
+		// 	new_value = *(*string)(ptr)
+		// case reflect.Pointer:
+		// 	new_value = *(*uintptr)(ptr)
+		// }
 		prev_value := node.value
 
 		if prev_value != new_value {
+			fmt.Println("PREV VALUE:", prev_value, "NEW:", new_value)
+			node.value = new_value
 			node.val.Render()
 		}
 	}
@@ -316,6 +301,7 @@ func (v *Val) SetStyle(key string, value func() string) *Val {
 }
 
 func (v *Val) Render() *Val {
+	// fmt.Println("render:", v.id)
 	for _, child := range v.children {
 		child.Render()
 	}
