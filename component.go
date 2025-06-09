@@ -195,28 +195,10 @@ func Update[T any](ptr unsafe.Pointer) {
 	}
 	for _, node := range nodes {
 
-		// var new_value any
 		new_value := any(*(*T)(ptr))
-
-		// switch node.kind {
-		// case reflect.Int:
-		// case reflect.Int32:
-		// 	new_value = *(*int32)(ptr)
-		// case reflect.Int64:
-		// 	new_value = *(*int64)(ptr)
-		// case reflect.Float32:
-		// 	new_value = *(*float32)(ptr)
-		// case reflect.Float64:
-		// 	new_value = *(*float64)(ptr)
-		// case reflect.String:
-		// 	new_value = *(*string)(ptr)
-		// case reflect.Pointer:
-		// 	new_value = *(*uintptr)(ptr)
-		// }
 		prev_value := node.value
 
 		if prev_value != new_value {
-			fmt.Println("PREV VALUE:", prev_value, "NEW:", new_value)
 			node.value = new_value
 			node.val.Render()
 		}
