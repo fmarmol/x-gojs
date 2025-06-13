@@ -29,13 +29,14 @@ type EventKind int
 
 type Event2 struct {
 	Val       *Val
-	EventArgs any
-	EventKind int
+	Args      any
+	eventKind int
 }
 
 var eventChan = make(chan Event2)
 
-func (v *Val) Send(event Event2) {
+func Send(eventKind int, event Event2) {
+	event.eventKind = eventKind
 	eventChan <- event
 }
 
@@ -132,6 +133,13 @@ func (v *Val) SwapChildren(i, j int) *Val {
 }
 
 func (v *Val) RemoveChild(child *Val) *Val {
+	if child.Parent != v {
+		panic(fmt.Errorf("cannot remove child parent %v different from caller %v", child.Parent.GetID(), v.GetID()))
+	}
+	if !child.Parent.Value.Equal(v.Value) {
+		panic(fmt.Errorf("cannot remove child parent %v different from caller %v", child.Parent.GetID(), v.GetID()))
+	}
+
 	newChildren := []*Val{}
 	for _, c := range v.children {
 		if c.id == child.id {
@@ -208,6 +216,13 @@ func Update[T any](ptr unsafe.Pointer) {
 func (v *Val) OnClick(f any) *Val {
 	v.onclick = f
 	return v
+}
+
+func (v *Val) OnChange(f JsFunc) *Val {
+	return v.f("change", f)
+}
+func (v *Val) OnInput(f JsFunc) *Val {
+	return v.f("input", f)
 }
 
 func (v *Val) C(others ...*Val) *Val {
@@ -519,7 +534,7 @@ func (h *Hub) register(event int, ch chan Event2) {
 
 func (h *Hub) run() {
 	for event := range eventChan {
-		for _, ch := range h.subscribers[event.EventKind] {
+		for _, ch := range h.subscribers[event.eventKind] {
 			ch <- event
 		}
 	}
