@@ -5,6 +5,7 @@ package gojs
 import (
 	"fmt"
 	"syscall/js"
+	"time"
 )
 
 type Animation struct {
@@ -13,7 +14,7 @@ type Animation struct {
 }
 type AnimationConfig struct {
 	Iterations int
-	Duration   int
+	Duration   time.Duration
 	Infinity   bool
 }
 
@@ -39,7 +40,7 @@ func (v *Val) Animate(animations []Animation, cfg AnimationConfig) *Val {
 		param2["iterations"] = cfg.Iterations
 	}
 
-	param2["duration"] = cfg.Duration
+	param2["duration"] = cfg.Duration.Milliseconds()
 
 	_p1 := []any{}
 	for _, m := range param1 {

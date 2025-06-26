@@ -83,6 +83,13 @@ type ClassCond struct {
 	Class string
 	Cond  func() bool
 }
+
+type AttrCond struct {
+	Attr  string
+	Value func() string
+	Cond  func() bool
+}
+
 type ClassRevCond struct {
 	class1 string
 	class2 string
@@ -93,6 +100,7 @@ type ClassRevCond struct {
 type Val struct {
 	Value           js.Value
 	attrs           []Attr
+	attrsOnCond     []AttrCond
 	styles          []Attr
 	classes         []string
 	classesOnCond   []ClassCond
@@ -110,6 +118,11 @@ type Val struct {
 func (v *Val) ID(id string) *Val {
 	v.id = id
 	return v
+}
+
+func (v *Val) Remove() {
+	v.Value.Call("remove")
+	// v = nil ??
 }
 
 func (v *Val) GetID() string {
@@ -150,6 +163,10 @@ func (v *Val) RemoveChild(child *Val) *Val {
 	}
 	v.children = newChildren
 	v.Value.Call("removeChild", child.Value)
+	return v
+}
+func (v *Val) AttrOnCond(attr string, value func() string, cond func() bool) *Val {
+	v.attrsOnCond = append(v.attrsOnCond, AttrCond{Attr: attr, Value: value, Cond: cond})
 	return v
 }
 
@@ -318,6 +335,13 @@ func (v *Val) Render() *Val {
 			v.DelClass(class.Class)
 		}
 	}
+	for _, attr := range v.attrsOnCond {
+		if attr.Cond() {
+			v.a(attr.Attr, attr.Value)
+		} else {
+			v.rma(attr.Attr)
+		}
+	}
 	for _, class := range v.classesOnRevCon {
 		classesOk := strings.Fields(class.class1)
 		classesKO := strings.Fields(class.class2)
@@ -386,6 +410,11 @@ func (v *Val) c(child *Val) *Val {
 
 func (v *Val) a(attrName string, value func() string) *Val {
 	v.Value.Set(attrName, value())
+	return v
+}
+
+func (v *Val) rma(attrName string) *Val {
+	v.Value.Call("removeAttribute", attrName)
 	return v
 }
 
@@ -509,6 +538,10 @@ func Img() *Val {
 
 func Div() *Val {
 	return n("DIV")
+}
+
+func Style() *Val {
+	return n("style")
 }
 
 func Delete(v *Val) {

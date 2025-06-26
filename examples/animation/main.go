@@ -3,6 +3,8 @@
 package main
 
 import (
+	"time"
+
 	. "github.com/fmarmol/x-gojs"
 )
 
@@ -23,7 +25,7 @@ func View() *Val {
 		Rotation(120),
 		Rotation(150),
 		Rotation(180),
-	}, AnimationConfig{Infinity: true, Duration: 10000})
+	}, AnimationConfig{Infinity: true, Duration: 10 * time.Second})
 
 	return div
 }
