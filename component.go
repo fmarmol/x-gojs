@@ -113,6 +113,13 @@ type Val struct {
 	IdxInParent     int
 	eventListeners  map[string]struct{}
 	eventChan       chan Event2
+	mux             sync.Mutex
+}
+
+type Imgui struct{ val *Val }
+
+func (v *Val) Imgui() *Imgui {
+	return &Imgui{val: v}
 }
 
 func (v *Val) ID(id string) *Val {
@@ -145,7 +152,14 @@ func (v *Val) SwapChildren(i, j int) *Val {
 	return v
 }
 
+func (i *Imgui) RemoveChild(child *Val) *Val {
+	i.val.Call("removeChild", child.Value)
+	return i.val
+}
+
 func (v *Val) RemoveChild(child *Val) *Val {
+	v.mux.Lock()
+	defer v.mux.Unlock()
 	if child.Parent != v {
 		panic(fmt.Errorf("cannot remove child parent %v different from caller %v", child.Parent.GetID(), v.GetID()))
 	}
@@ -153,7 +167,7 @@ func (v *Val) RemoveChild(child *Val) *Val {
 		panic(fmt.Errorf("cannot remove child parent %v different from caller %v", child.Parent.GetID(), v.GetID()))
 	}
 
-	newChildren := []*Val{}
+	newChildren := make([]*Val, 0, len(v.children))
 	for _, c := range v.children {
 		if c.id == child.id {
 			continue
@@ -205,12 +219,40 @@ func (v *Val) Text(f func() string) *Val {
 func State[T any](v *Val, _struct any, field string) {
 	_sval := reflect.ValueOf(_struct)
 	_field := _sval.Elem().FieldByName(field)
+	// var _field reflect.Value
+	// if _sval.Kind() == reflect.Pointer {
+	// } else {
+	// 	_field = _sval.FieldByName(field)
+	// }
 	_fieldKind := _field.Kind()
 	addr := _field.Addr()
 	fieldValue := _field.Interface()
 
 	ptr := unsafe.Pointer(addr.Interface().(*T))
 	nodes[ptr] = append(nodes[ptr], &Elem{value: fieldValue, val: v, kind: _fieldKind})
+}
+
+func UpdateV2[T any](v *T) {
+	ptr := unsafe.Pointer(v)
+	nodes, ok := nodes[ptr]
+	if !ok {
+		log.Println("Warning not found")
+	}
+	for _, node := range nodes {
+
+		new_value := any(*(*T)(ptr))
+		prev_value := node.value
+
+		if !reflect.DeepEqual(new_value, prev_value) {
+			node.value = new_value
+			node.val.Render()
+		}
+		// if prev_value != new_value {
+		// 	node.value = new_value
+		// 	node.val.Render()
+		// }
+	}
+
 }
 
 func Update[T any](ptr unsafe.Pointer) {
@@ -242,6 +284,13 @@ func (v *Val) OnInput(f JsFunc) *Val {
 	return v.f("input", f)
 }
 
+func (imgui *Imgui) C(others ...*Val) *Val {
+	for _, other := range others {
+		imgui.val.c(other)
+	}
+	return imgui.val
+}
+
 func (v *Val) C(others ...*Val) *Val {
 	for _, other := range others {
 		v.children = append(v.children, other)
@@ -250,6 +299,19 @@ func (v *Val) C(others ...*Val) *Val {
 		v.c(other)
 	}
 	return v
+}
+
+func (v *Val) P(others ...*Val) *Val {
+	for _, other := range others {
+		other.Parent = v
+		v.p(other)
+		v.children = append([]*Val{other}, v.children...)
+	}
+	return v
+}
+
+func (v *Val) MouseMove(f JsFunc) *Val {
+	return v.f("mousemove", f)
 }
 
 func (v *Val) MouseEnter(f JsFunc) *Val {
@@ -299,6 +361,15 @@ func (v *Val) Style(key string, value func() string) *Val {
 	return v
 }
 
+func (i *Imgui) AddClass(c string) *Val {
+	i.val.Value.Get("classList").Call("add", c)
+	return i.val
+}
+func (i *Imgui) DelClass(c string) *Val {
+	i.val.Value.Get("classList").Call("remove", c)
+	return i.val
+}
+
 func (v *Val) AddClass(c string) *Val {
 	v.Value.Get("classList").Call("add", c)
 	return v
@@ -307,6 +378,11 @@ func (v *Val) AddClass(c string) *Val {
 func (v *Val) DelClass(c string) *Val {
 	v.Value.Get("classList").Call("remove", c)
 	return v
+}
+
+func (imgui *Imgui) SetStyle(key string, value string) *Val {
+	imgui.val.Value.Get("style").Set(key, func() string { return value })
+	return imgui.val
 }
 
 func (v *Val) SetStyle(key string, value func() string) *Val {
@@ -403,9 +479,28 @@ func (v *Val) Call(funcname string, args ...any) js.Value {
 	return v.Value.Call(funcname, args...)
 }
 
+// func (i *Imgui) C(child *Val) *Val {
+// 	return i.val.c(child)
+// }
+
 func (v *Val) c(child *Val) *Val {
 	v.Call("appendChild", child.Value)
 	return v
+}
+func (v *Val) p(child *Val) *Val {
+	if len(v.children) == 0 {
+		v.c(child)
+	} else {
+		if child.Parent != v.children[0].Parent {
+			panic("not possible")
+		}
+		v.Call("insertBefore", child.Value, v.children[0].Value)
+	}
+	return v
+}
+
+func (i *Imgui) A(attrName string, value func() string) *Val {
+	return i.val.a(attrName, value)
 }
 
 func (v *Val) a(attrName string, value func() string) *Val {
@@ -538,6 +633,10 @@ func Img() *Val {
 
 func Div() *Val {
 	return n("DIV")
+}
+
+func Svg() *Val {
+	return n("SVG")
 }
 
 func Style() *Val {
