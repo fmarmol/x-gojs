@@ -6,7 +6,7 @@ import (
 	"syscall/js"
 	"unsafe"
 
-	. "github.com/fmarmol/x-gojs"
+	. "github.com/fmarmol/gojs"
 )
 
 type InputExample struct {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"unsafe"
 
-	. "github.com/fmarmol/x-gojs"
+	. "github.com/fmarmol/gojs"
 )
 
 type Counter struct {

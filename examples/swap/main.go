@@ -3,7 +3,7 @@
 package main
 
 import (
-	. "github.com/fmarmol/x-gojs"
+	. "github.com/fmarmol/gojs"
 )
 
 func main() {

@@ -5,7 +5,7 @@ package main
 import (
 	"fmt"
 
-	. "github.com/fmarmol/x-gojs"
+	. "github.com/fmarmol/gojs"
 )
 
 type Counter struct {

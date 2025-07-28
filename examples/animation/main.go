@@ -5,7 +5,7 @@ package main
 import (
 	"time"
 
-	. "github.com/fmarmol/x-gojs"
+	. "github.com/fmarmol/gojs"
 )
 
 func View() *Val {
