@@ -4,7 +4,6 @@ package main
 
 import (
 	"syscall/js"
-	"unsafe"
 
 	. "github.com/fmarmol/gojs"
 )
@@ -19,12 +18,12 @@ func (c *InputExample) View() *Val {
 		Input().Attr("type", String("text")).OnInput(func(this js.Value, args []js.Value) any {
 			event := args[0]
 			c.Text = event.Get("target").Get("value").String()
-			Update[string](unsafe.Pointer(&c.Text))
+			Update(&c.Text)
 			return nil
 		}).Attr("value", func() string { return c.Text }),
 		Div().Text(func() string { return c.Text }),
 	)
-	State[string](div, c, "Text")
+	State(div, &c.Text)
 	return div
 }
 

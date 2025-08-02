@@ -7,16 +7,17 @@ import (
 	"log"
 	"math/rand/v2"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall/js"
+	"time"
 	"unsafe"
 )
 
 type Elem struct {
 	value any
 	val   *Val
-	kind  reflect.Kind
 }
 
 var nodes map[unsafe.Pointer][]*Elem
@@ -28,27 +29,36 @@ func init() {
 type EventKind int
 
 type Event2 struct {
-	Val       *Val
-	Args      any
-	eventKind int
+	Val          *Val
+	Args         any
+	eventKind    int
+	response     chan struct{}
+	NeedResponse bool
 }
 
 var eventChan = make(chan Event2)
 
-func Send(eventKind int, event Event2) {
+func Send(eventKind int, event Event2) <-chan struct{} {
 	event.eventKind = eventKind
+	event.response = make(chan struct{}, 1)
 	eventChan <- event
+	return event.response
 }
 
 func (v *Val) SubScribe(eventKind int, f func(e Event2)) (cancel func()) {
-	// if v.eventChan == nil {
-	// 	v.eventChan = make(chan Event2)
-	// }
 	newC := make(chan Event2)
 	hub.register(eventKind, newC)
 	go func() {
 		for event := range newC {
 			f(event)
+			if event.NeedResponse { // WARN: if multiple subscribers can lock goroutine, Only use if only one subcriber !!
+				timer := time.NewTimer(10 * time.Millisecond)
+				select {
+				case event.response <- struct{}{}:
+				case <-timer.C:
+					panic(fmt.Errorf("timeout in response to event: %v", event))
+				}
+			}
 		}
 	}()
 	return func() {
@@ -73,9 +83,15 @@ type Attr struct {
 	Value func() string
 }
 
-func String[T ~string | ~int | ~float32 | ~float64](s T) func() string {
+func String(s any) func() string {
 	return func() string {
 		return fmt.Sprint(s)
+	}
+}
+
+func StringFmt(format string, values ...any) func() string {
+	return func() string {
+		return fmt.Sprintf(format, values...)
 	}
 }
 
@@ -216,56 +232,26 @@ func (v *Val) Text(f func() string) *Val {
 	return v
 }
 
-func State[T any](v *Val, _struct any, field string) {
-	_sval := reflect.ValueOf(_struct)
-	_field := _sval.Elem().FieldByName(field)
-	// var _field reflect.Value
-	// if _sval.Kind() == reflect.Pointer {
-	// } else {
-	// 	_field = _sval.FieldByName(field)
-	// }
-	_fieldKind := _field.Kind()
-	addr := _field.Addr()
-	fieldValue := _field.Interface()
-
-	ptr := unsafe.Pointer(addr.Interface().(*T))
-	nodes[ptr] = append(nodes[ptr], &Elem{value: fieldValue, val: v, kind: _fieldKind})
+func State[T any](val *Val, v *T) {
+	if v == nil {
+		panic("pointer nil")
+	}
+	ptr := unsafe.Pointer(v)
+	nodes[ptr] = append(nodes[ptr], &Elem{val: val, value: *v})
 }
 
-func UpdateV2[T any](v *T) {
+func Update[T any](v *T) {
 	ptr := unsafe.Pointer(v)
 	nodes, ok := nodes[ptr]
 	if !ok {
-		log.Println("Warning not found")
+		_, file, line, _ := runtime.Caller(1)
+		log.Printf("Warning not found from: file=%s, line=%d\n", file, line)
 	}
 	for _, node := range nodes {
-
-		new_value := any(*(*T)(ptr))
+		new_value := *v
 		prev_value := node.value
 
 		if !reflect.DeepEqual(new_value, prev_value) {
-			node.value = new_value
-			node.val.Render()
-		}
-		// if prev_value != new_value {
-		// 	node.value = new_value
-		// 	node.val.Render()
-		// }
-	}
-
-}
-
-func Update[T any](ptr unsafe.Pointer) {
-	nodes, ok := nodes[ptr]
-	if !ok {
-		log.Println("Warning not found")
-	}
-	for _, node := range nodes {
-
-		new_value := any(*(*T)(ptr))
-		prev_value := node.value
-
-		if prev_value != new_value {
 			node.value = new_value
 			node.val.Render()
 		}
@@ -629,6 +615,14 @@ func Button() *Val {
 
 func Img() *Val {
 	return n("IMG")
+}
+
+func Details() *Val {
+	return n("DETAILS")
+}
+
+func Summary() *Val {
+	return n("SUMMARY")
 }
 
 func Div() *Val {
