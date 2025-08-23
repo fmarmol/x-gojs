@@ -36,7 +36,7 @@ type Event2 struct {
 	NeedResponse bool
 }
 
-var eventChan = make(chan Event2)
+var eventChan = make(chan Event2, 1)
 
 func Send(eventKind int, event Event2) <-chan struct{} {
 	event.eventKind = eventKind
@@ -127,9 +127,10 @@ type Val struct {
 	textfn          func() string
 	Parent          *Val
 	IdxInParent     int
-	eventListeners  map[string]struct{}
+	eventListeners  map[string]any
 	eventChan       chan Event2
 	mux             sync.Mutex
+	toBeclean       bool
 }
 
 type Imgui struct{ val *Val }
@@ -144,6 +145,8 @@ func (v *Val) ID(id string) *Val {
 }
 
 func (v *Val) Remove() {
+	v.toBeclean = true
+	v.RemoveChildren()
 	v.Value.Call("remove")
 	// v = nil ??
 }
@@ -159,6 +162,7 @@ func (v *Val) Children() []*Val {
 func (v *Val) SwapChildren(i, j int) *Val {
 	children := v.children
 	for _, child := range children {
+		child.RemoveChildren()
 		v.RemoveChild(child)
 	}
 	children[i], children[j] = children[j], children[i]
@@ -173,9 +177,20 @@ func (i *Imgui) RemoveChild(child *Val) *Val {
 	return i.val
 }
 
+func (v *Val) RemoveChildren() *Val {
+	for _, child := range v.Children() {
+		v.RemoveChild(child)
+		child.RemoveChildren()
+	}
+	return v
+}
+
 func (v *Val) RemoveChild(child *Val) *Val {
 	v.mux.Lock()
 	defer v.mux.Unlock()
+
+	child.toBeclean = true
+	child.RemoveListeners()
 	if child.Parent != v {
 		panic(fmt.Errorf("cannot remove child parent %v different from caller %v", child.Parent.GetID(), v.GetID()))
 	}
@@ -186,6 +201,7 @@ func (v *Val) RemoveChild(child *Val) *Val {
 	newChildren := make([]*Val, 0, len(v.children))
 	for _, c := range v.children {
 		if c.id == child.id {
+			child.Parent = nil
 			continue
 		}
 		newChildren = append(newChildren, c)
@@ -227,6 +243,11 @@ func (v *Val) Class(values ...string) *Val {
 	return v
 }
 
+// TextS for TextStatic
+func (v *Val) TextS(s string) *Val {
+	return v.Text(String(s))
+}
+
 func (v *Val) Text(f func() string) *Val {
 	v.textfn = f
 	return v
@@ -236,26 +257,33 @@ func State[T any](val *Val, v *T) {
 	if v == nil {
 		panic("pointer nil")
 	}
+	// _, file, line, _ := runtime.Caller(1)
+	// fmt.Println("CALLING STATE FROM", file, line)
 	ptr := unsafe.Pointer(v)
 	nodes[ptr] = append(nodes[ptr], &Elem{val: val, value: *v})
 }
 
 func Update[T any](v *T) {
 	ptr := unsafe.Pointer(v)
-	nodes, ok := nodes[ptr]
+	nds, ok := nodes[ptr]
 	if !ok {
 		_, file, line, _ := runtime.Caller(1)
 		log.Printf("Warning not found from: file=%s, line=%d\n", file, line)
 	}
-	for _, node := range nodes {
-		new_value := *v
-		prev_value := node.value
-
-		if !reflect.DeepEqual(new_value, prev_value) {
-			node.value = new_value
-			node.val.Render()
+	new_elems := []*Elem{}
+	for _, elem := range nds {
+		if elem.val.toBeclean {
+			continue
 		}
+		new_value := *v
+		prev_value := elem.value
+		if !reflect.DeepEqual(new_value, prev_value) {
+			elem.value = new_value
+			elem.val.Render()
+		}
+		new_elems = append(new_elems, elem)
 	}
+	nodes[ptr] = new_elems
 }
 
 func (v *Val) OnClick(f any) *Val {
@@ -378,6 +406,19 @@ func (v *Val) SetStyle(key string, value func() string) *Val {
 
 func (v *Val) Render() *Val {
 	// fmt.Println("render:", v.id)
+	if v.toBeclean {
+		v.Value.Call("remove")
+		v.children = nil
+		v.eventListeners = nil
+		v.attrs = nil
+		v.attrsOnCond = nil
+		v.classes = nil
+		v.classesOnCond = nil
+		v.classesOnRevCon = nil
+		v.onclick = nil
+		v.textfn = nil
+		return v
+	}
 	for _, child := range v.children {
 		child.Render()
 	}
@@ -503,6 +544,14 @@ func (v *Val) AddEventListener(event string, fn any) {
 	v.f(event, fn)
 }
 
+func (v *Val) RemoveListeners() *Val {
+	for event, jsF := range v.eventListeners {
+		v.Call("removeEventListener", event, jsF)
+	}
+	v.eventListeners = nil
+	return v
+}
+
 func (v *Val) f(event string, value any) *Val {
 	_type := reflect.TypeOf(value)
 	if _type.Kind() != reflect.Func {
@@ -510,14 +559,13 @@ func (v *Val) f(event string, value any) *Val {
 
 	}
 	if v.eventListeners == nil {
-		v.eventListeners = map[string]struct{}{}
+		v.eventListeners = make(map[string]any)
 	}
 	_, ok := v.eventListeners[event]
 	if ok {
 		return v
 	}
 
-	v.eventListeners[event] = struct{}{}
 	fnType := reflect.TypeOf(func(js.Value, []js.Value) any { return nil })
 
 	switch _type.NumIn() {
@@ -530,6 +578,7 @@ func (v *Val) f(event string, value any) *Val {
 		goF := resFn.Convert(fnType).Interface().(func(js.Value, []js.Value) any)
 		jsF := js.FuncOf(goF)
 		v.Value.Call("addEventListener", event, jsF)
+		v.eventListeners[event] = jsF
 		return v
 	case 2:
 		fn := value.(func(this js.Value, args []js.Value) any)
@@ -542,6 +591,7 @@ func (v *Val) f(event string, value any) *Val {
 		goF := resFn.Convert(fnType).Interface().(func(js.Value, []js.Value) any)
 		jsF := js.FuncOf(goF)
 		v.Value.Call("addEventListener", event, jsF)
+		v.eventListeners[event] = jsF
 		return v
 	default:
 		panic(fmt.Errorf("func with %d args not supported", _type.NumIn()))

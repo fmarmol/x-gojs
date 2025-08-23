@@ -49,6 +49,10 @@ func (w *WebSocket) OnOpen(fn JsFunc) {
 	w.ws.Set("onopen", js.FuncOf(fn))
 }
 
+func (w *WebSocket) OnClose(fn JsFunc) {
+	w.ws.Set("onclose", js.FuncOf(fn))
+}
+
 func (w *WebSocket) OnMessage(fn JsFunc) {
 	w.ws.Set("onmessage", js.FuncOf(fn))
 }

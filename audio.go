@@ -7,10 +7,19 @@ import (
 	"fmt"
 )
 
-func Audio(autoplay bool) *Val {
+func Audio(autoplay bool, controls bool, muted bool, loop bool) *Val {
 	audio := n("audio")
 	if autoplay {
 		audio.Imgui().A("autoplay", String("true"))
+	}
+	if controls {
+		audio.Imgui().A("controls", String("true"))
+	}
+	if muted {
+		audio.Imgui().A("muted", String("true"))
+	}
+	if loop {
+		audio.Imgui().A("loop", String("true"))
 	}
 	return audio
 }
